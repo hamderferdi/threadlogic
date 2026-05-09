@@ -207,10 +207,10 @@ export default function App() {
       </header>
 
       {/* ── Workspace ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'var(--sidebar-w) 1fr var(--params-w)', gridTemplateRows: '1fr', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
         {/* Sidebar */}
-        <aside style={{ background: 'var(--surface)', borderRight: '.5px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '8px 0' }}>
+        <aside style={{ width: 'var(--sidebar-w)', flexShrink: 0, background: 'var(--surface)', borderRight: '.5px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '8px 0' }}>
           {NAV_ITEMS.map((item, i) => {
             const prevGroup = i > 0 ? NAV_ITEMS[i - 1].group : null
             const showGroupLabel = item.group && item.group !== prevGroup
@@ -277,7 +277,7 @@ export default function App() {
         </aside>
 
         {/* Canvas area */}
-        <main style={{ background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
+        <main style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
 
           {/* Floating toolbar */}
           <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onDelete={() => canvasRef.current?.deleteSelected()} />
