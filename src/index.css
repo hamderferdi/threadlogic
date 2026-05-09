@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+input[type="range"] {
+  cursor: pointer;
+}
+
+input[type="color"] {
+  cursor: pointer;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+}
