@@ -438,23 +438,35 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       const el = canvasElRef.current
       if (!container || !el) return
 
-      // Pre-size the canvas element before Fabric reads it.
-      // Fabric's constructor uses el.width/el.height as initial dimensions,
-      // so setting them here avoids the default 300×150 flash.
-      const pw = container.clientWidth, ph = container.clientHeight
-      if (pw > 0) el.width = pw
-      if (ph > 0) el.height = ph
+      // Compute canvas size from window dimensions + CSS variable offsets.
+      // This is more reliable than container.clientWidth which can read as 0
+      // if layout hasn't settled when the effect fires.
+      const getCSSPx = (name: string, fallback: number) => {
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+        const n = parseFloat(v)
+        return isNaN(n) ? fallback : n
+      }
+      const getSize = () => ({
+        w: Math.floor(window.innerWidth  - getCSSPx('--sidebar-w', 210) - getCSSPx('--params-w', 272)),
+        h: Math.floor(window.innerHeight - getCSSPx('--topbar-h',  48)),
+      })
+
+      const { w: iw, h: ih } = getSize()
+      el.width  = iw
+      el.height = ih
 
       const fc = new fabric.Canvas(el, {
         selection: true,
         preserveObjectStacking: true,
+        width: iw,
+        height: ih,
       })
       fcRef.current = fc
-      hoopRef.current = { centerX: pw / 2, centerY: ph / 2, size: Math.min(pw, ph) * 0.8 }
+      hoopRef.current = { centerX: iw / 2, centerY: ih / 2, size: Math.min(iw, ih) * 0.8 }
 
       const resize = () => {
-        const w = container.clientWidth, h = container.clientHeight
-        if (w === 0 || h === 0) return
+        const { w, h } = getSize()
+        if (w <= 0 || h <= 0) return
         fc.setWidth(w); fc.setHeight(h)
         const ov = overlayRef.current
         if (ov) { ov.width = w; ov.height = h }
