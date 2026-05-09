@@ -479,20 +479,19 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       ro.observe(container)
       window.addEventListener('resize', resize)
 
-      // ── White background + grid (drawn in before:render, behind all objects) ──
+      // ── Grid overlay — draws on top of CSS background, zooms/pans with objects ──
       fc.on('before:render', ({ ctx }: any) => {
         const vpt = (fc.viewportTransform ?? [1, 0, 0, 1, 0, 0]) as number[]
         const zoom = vpt[0]
         const W = fc.width ?? 0, H = fc.height ?? 0
 
-        // White fill — use physical pixel dimensions so retina (DPR>1) is fully covered
+        // Clear to transparent so the CSS background on <main> shows through
         ctx.save()
         ctx.setTransform(1, 0, 0, 1, 0, 0)
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
         ctx.restore()
 
-        // Grid lines in logical canvas space
+        // Grid lines in world space — these zoom and pan with the canvas
         const invZ = 1 / zoom
         const ox = -vpt[4] * invZ, oy = -vpt[5] * invZ
         const ex = ox + W * invZ, ey = oy + H * invZ

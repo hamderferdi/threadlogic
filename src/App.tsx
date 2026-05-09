@@ -276,8 +276,16 @@ export default function App() {
           )}
         </aside>
 
-        {/* Canvas area */}
-        <main style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
+        {/* Canvas area — white + grid fills this via CSS, no JS sizing needed */}
+        <main style={{
+          flex: 1,
+          minWidth: 0,
+          position: 'relative',
+          overflow: 'hidden',
+          backgroundColor: '#ffffff',
+          backgroundImage: 'linear-gradient(#e8e8e8 1px, transparent 1px), linear-gradient(90deg, #e8e8e8 1px, transparent 1px)',
+          backgroundSize: '25px 25px',
+        }}>
 
           {/* Floating toolbar */}
           <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onDelete={() => canvasRef.current?.deleteSelected()} />
