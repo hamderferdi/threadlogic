@@ -438,11 +438,19 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       const el = canvasElRef.current
       if (!container || !el) return
 
+      // Pre-size the canvas element before Fabric reads it.
+      // Fabric's constructor uses el.width/el.height as initial dimensions,
+      // so setting them here avoids the default 300×150 flash.
+      const pw = container.clientWidth, ph = container.clientHeight
+      if (pw > 0) el.width = pw
+      if (ph > 0) el.height = ph
+
       const fc = new fabric.Canvas(el, {
         selection: true,
         preserveObjectStacking: true,
       })
       fcRef.current = fc
+      hoopRef.current = { centerX: pw / 2, centerY: ph / 2, size: Math.min(pw, ph) * 0.8 }
 
       const resize = () => {
         const w = container.clientWidth, h = container.clientHeight
@@ -748,15 +756,7 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [activeTool, stitchProps.color])
 
     return (
-      <div ref={containerRef} style={{
-        position: 'fixed',
-        top: 'var(--topbar-h)',
-        left: 'var(--sidebar-w)',
-        right: 'var(--params-w)',
-        bottom: 0,
-        overflow: 'hidden',
-        zIndex: 1,
-      }}>
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
         <canvas ref={canvasElRef} />
         <canvas ref={overlayRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
       </div>

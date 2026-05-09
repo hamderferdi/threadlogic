@@ -138,7 +138,7 @@ export default function App() {
         background: 'var(--surface)',
         borderBottom: '.5px solid var(--border-mid)',
         flexShrink: 0,
-        zIndex: 30,
+        zIndex: 10,
       }}>
         {/* Logo */}
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, letterSpacing: '-.02em' }}>
@@ -210,7 +210,7 @@ export default function App() {
       <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
         {/* Sidebar */}
-        <aside style={{ width: 'var(--sidebar-w)', flexShrink: 0, background: 'var(--surface)', borderRight: '.5px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '8px 0', position: 'relative', zIndex: 10 }}>
+        <aside style={{ width: 'var(--sidebar-w)', flexShrink: 0, background: 'var(--surface)', borderRight: '.5px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '8px 0' }}>
           {NAV_ITEMS.map((item, i) => {
             const prevGroup = i > 0 ? NAV_ITEMS[i - 1].group : null
             const showGroupLabel = item.group && item.group !== prevGroup
@@ -354,16 +354,14 @@ export default function App() {
         </main>
 
         {/* Params panel */}
-        <div style={{ position: 'relative', zIndex: 10, flexShrink: 0 }}>
-          <RightPanel
-            objects={objects}
-            hasSelection={hasSelection}
-            stitchProps={stitchProps}
-            onStitchChange={handleStitchChange}
-            onSelectObject={id => canvasRef.current?.selectObjectById(id)}
-            onToggleVisibility={id => canvasRef.current?.toggleObjectVisibility(id)}
-          />
-        </div>
+        <RightPanel
+          objects={objects}
+          hasSelection={hasSelection}
+          stitchProps={stitchProps}
+          onStitchChange={handleStitchChange}
+          onSelectObject={id => canvasRef.current?.selectObjectById(id)}
+          onToggleVisibility={id => canvasRef.current?.toggleObjectVisibility(id)}
+        />
       </div>
     </div>
   )
