@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import {
   Undo2, Redo2, Upload, Download,
   Pencil, Eye, Sliders, Play,
@@ -54,6 +54,21 @@ export default function App() {
   const [activeNav, setActiveNav]     = useState('Design')
   const [gridOn, setGridOn]           = useState(false)
   const canvasRef = useRef<EmbroideryCanvasHandle>(null)
+  const mainRef   = useRef<HTMLElement>(null)
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
+
+  useLayoutEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    const measure = () => {
+      const r = el.getBoundingClientRect()
+      setCanvasSize({ w: Math.round(r.width), h: Math.round(r.height) })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const showToast = (msg: string, type: 'ok' | 'warn' | 'err' = 'ok') => {
     setToast({ msg, type })
@@ -276,8 +291,8 @@ export default function App() {
           )}
         </aside>
 
-        {/* Canvas area — white + grid fills this via CSS, no JS sizing needed */}
-        <main style={{
+        {/* Canvas area */}
+        <main ref={mainRef} style={{
           flex: 1,
           minWidth: 0,
           position: 'relative',
@@ -313,7 +328,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* Canvas — position:fixed between the sidebars */}
           <EmbroideryCanvas
             ref={canvasRef}
             activeTool={activeTool}
@@ -321,6 +335,8 @@ export default function App() {
             onSelectionChange={handleSelectionChange}
             onObjectsChange={setObjects}
             onZoomChange={setZoom}
+            canvasWidth={canvasSize.w}
+            canvasHeight={canvasSize.h}
           />
 
           {/* Toast notification */}

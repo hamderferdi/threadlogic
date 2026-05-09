@@ -71,13 +71,4 @@ input[type="color"] { cursor: pointer; padding: 0; border: none; }
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: var(--border-mid); border-radius: 3px; }
 
-/* Force Fabric's wrapper and canvases to fill the container */
-.canvas-container,
-.canvas-container canvas {
-  width: 100% !important;
-  height: 100% !important;
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-}
 

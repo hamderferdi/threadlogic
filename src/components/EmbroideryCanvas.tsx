@@ -20,6 +20,8 @@ interface Props {
   onSelectionChange: (hasSelection: boolean, props: StitchProperties | null) => void
   onObjectsChange?: (objects: CanvasObjectInfo[]) => void
   onZoomChange?: (zoom: number) => void
+  canvasWidth?: number
+  canvasHeight?: number
 }
 
 export interface EmbroideryCanvasHandle {
@@ -301,7 +303,7 @@ function renderStitchPreview(ctx: CanvasRenderingContext2D, obj: fabric.Object) 
 // ─── Component ─────────────────────────────────────────────────────────────
 
 const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
-  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange }, ref) => {
+  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange, canvasWidth = 0, canvasHeight = 0 }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const canvasElRef = useRef<HTMLCanvasElement>(null)
     const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -438,37 +440,11 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       const el = canvasElRef.current
       if (!container || !el) return
 
-      const getSize = () => {
-        const r = container.getBoundingClientRect()
-        return { w: Math.round(r.width), h: Math.round(r.height) }
-      }
-
-      const { w: iw, h: ih } = getSize()
-      el.width  = iw || 800
-      el.height = ih || 600
-
       const fc = new fabric.Canvas(el, {
         selection: true,
         preserveObjectStacking: true,
-        width:  iw || 800,
-        height: ih || 600,
       })
       fcRef.current = fc
-      hoopRef.current = { centerX: (iw || 800) / 2, centerY: (ih || 600) / 2, size: Math.min(iw || 800, ih || 600) * 0.8 }
-
-      const resize = () => {
-        const { w, h } = getSize()
-        if (w <= 0 || h <= 0) return
-        fc.setWidth(w); fc.setHeight(h)
-        const ov = overlayRef.current
-        if (ov) { ov.width = w; ov.height = h }
-        hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
-        fc.renderAll()
-      }
-      let rafId = requestAnimationFrame(resize)
-      const ro = new ResizeObserver(() => { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(resize) })
-      ro.observe(container)
-      window.addEventListener('resize', resize)
 
       // ── Grid overlay — draws on top of CSS background, zooms/pans with objects ──
       fc.on('before:render', ({ ctx }: any) => {
@@ -723,9 +699,6 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       window.addEventListener('keyup', onKeyUp)
 
       return () => {
-        cancelAnimationFrame(rafId)
-        ro.disconnect()
-        window.removeEventListener('resize', resize)
         window.removeEventListener('keydown', onKeyDown)
         window.removeEventListener('keyup', onKeyUp)
         fc.dispose(); fcRef.current = null
@@ -733,6 +706,17 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [notifyObjects])
 
     useEffect(() => { const cleanup = initCanvas(); return () => { cleanup?.() } }, [initCanvas])
+
+    useEffect(() => {
+      const fc = fcRef.current
+      if (!fc || canvasWidth === 0 || canvasHeight === 0) return
+      fc.setWidth(canvasWidth)
+      fc.setHeight(canvasHeight)
+      const ov = overlayRef.current
+      if (ov) { ov.width = canvasWidth; ov.height = canvasHeight }
+      hoopRef.current = { centerX: canvasWidth / 2, centerY: canvasHeight / 2, size: Math.min(canvasWidth, canvasHeight) * 0.8 }
+      fc.renderAll()
+    }, [canvasWidth, canvasHeight])
 
     useEffect(() => {
       const fc = fcRef.current
