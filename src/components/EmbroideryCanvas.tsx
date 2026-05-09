@@ -20,8 +20,6 @@ interface Props {
   onSelectionChange: (hasSelection: boolean, props: StitchProperties | null) => void
   onObjectsChange?: (objects: CanvasObjectInfo[]) => void
   onZoomChange?: (zoom: number) => void
-  canvasWidth?: number
-  canvasHeight?: number
 }
 
 export interface EmbroideryCanvasHandle {
@@ -303,7 +301,7 @@ function renderStitchPreview(ctx: CanvasRenderingContext2D, obj: fabric.Object) 
 // ─── Component ─────────────────────────────────────────────────────────────
 
 const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
-  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange, canvasWidth = 0, canvasHeight = 0 }, ref) => {
+  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const canvasElRef = useRef<HTMLCanvasElement>(null)
     const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -440,11 +438,42 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       const el = canvasElRef.current
       if (!container || !el) return
 
+      // Let CSS fill the parent, then read the actual rendered pixel size.
+      // This is the most reliable way — no DOM measurement guesswork.
+      el.style.display = 'block'
+      el.style.width   = '100%'
+      el.style.height  = '100%'
+      const { width: w, height: h } = el.getBoundingClientRect()
+      el.width  = Math.round(w) || 800
+      el.height = Math.round(h) || 600
+
       const fc = new fabric.Canvas(el, {
         selection: true,
         preserveObjectStacking: true,
+        width:  el.width,
+        height: el.height,
       })
       fcRef.current = fc
+      hoopRef.current = { centerX: el.width / 2, centerY: el.height / 2, size: Math.min(el.width, el.height) * 0.8 }
+
+      const resize = () => {
+        // After Fabric init, Fabric's own wrapper controls the CSS size.
+        // Read the wrapper's rendered size so we stay in sync.
+        const wrap = el.parentElement  // .canvas-container
+        if (!wrap) return
+        const r = wrap.getBoundingClientRect()
+        const nw = Math.round(r.width)  || container.clientWidth
+        const nh = Math.round(r.height) || container.clientHeight
+        if (!nw || !nh) return
+        fc.setWidth(nw); fc.setHeight(nh)
+        const ov = overlayRef.current
+        if (ov) { ov.width = nw; ov.height = nh }
+        hoopRef.current = { centerX: nw / 2, centerY: nh / 2, size: Math.min(nw, nh) * 0.8 }
+        fc.renderAll()
+      }
+      const ro = new ResizeObserver(resize)
+      ro.observe(container)
+      window.addEventListener('resize', resize)
 
       // ── Grid overlay — draws on top of CSS background, zooms/pans with objects ──
       fc.on('before:render', ({ ctx }: any) => {
@@ -699,6 +728,8 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       window.addEventListener('keyup', onKeyUp)
 
       return () => {
+        ro.disconnect()
+        window.removeEventListener('resize', resize)
         window.removeEventListener('keydown', onKeyDown)
         window.removeEventListener('keyup', onKeyUp)
         fc.dispose(); fcRef.current = null
@@ -706,17 +737,6 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [notifyObjects])
 
     useEffect(() => { const cleanup = initCanvas(); return () => { cleanup?.() } }, [initCanvas])
-
-    useEffect(() => {
-      const fc = fcRef.current
-      if (!fc || canvasWidth === 0 || canvasHeight === 0) return
-      fc.setWidth(canvasWidth)
-      fc.setHeight(canvasHeight)
-      const ov = overlayRef.current
-      if (ov) { ov.width = canvasWidth; ov.height = canvasHeight }
-      hoopRef.current = { centerX: canvasWidth / 2, centerY: canvasHeight / 2, size: Math.min(canvasWidth, canvasHeight) * 0.8 }
-      fc.renderAll()
-    }, [canvasWidth, canvasHeight])
 
     useEffect(() => {
       const fc = fcRef.current
@@ -743,9 +763,9 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [activeTool, stitchProps.color])
 
     return (
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-        <canvas ref={canvasElRef} />
-        <canvas ref={overlayRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }}>
+        <canvas ref={canvasElRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+        <canvas ref={overlayRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
       </div>
     )
   }
