@@ -445,9 +445,8 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       fcRef.current = fc
 
       const resize = () => {
-        // Read from the parent element — guaranteed to have the flex-computed size
-        const parent = container.parentElement ?? container
-        const w = parent.clientWidth, h = parent.clientHeight
+        // container is position:absolute inset:0 — its own clientWidth/Height is always correct
+        const w = container.clientWidth, h = container.clientHeight
         if (w === 0 || h === 0) return
         fc.setWidth(w); fc.setHeight(h)
         const ov = overlayRef.current
@@ -455,10 +454,9 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
         hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
         fc.renderAll()
       }
-      // Use rAF so the browser has completed the flex layout pass before we measure
       let rafId = requestAnimationFrame(resize)
       const ro = new ResizeObserver(() => { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(resize) })
-      ro.observe(container.parentElement ?? container)
+      ro.observe(container)
       window.addEventListener('resize', resize)
 
       // ── White background + grid (drawn in before:render, behind all objects) ──
@@ -751,7 +749,7 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [activeTool, stitchProps.color])
 
     return (
-      <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
         <canvas ref={canvasElRef} />
         <canvas ref={overlayRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
       </div>
