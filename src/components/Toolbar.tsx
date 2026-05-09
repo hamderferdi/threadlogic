@@ -11,17 +11,17 @@ interface Props {
 }
 
 const GROUPS: { tool: Tool; icon: React.ReactNode; label: string; shortcut: string }[][] = [
-  [{ tool: 'select',   icon: <MousePointer2 size={16} />, label: 'Select',    shortcut: 'V' }],
+  [{ tool: 'select',   icon: <MousePointer2 size={15} />, label: 'Select',    shortcut: 'V' }],
   [
-    { tool: 'rect',     icon: <Square size={16} />,        label: 'Rectangle', shortcut: 'R' },
-    { tool: 'circle',   icon: <Circle size={16} />,        label: 'Ellipse',   shortcut: 'E' },
-    { tool: 'triangle', icon: <Triangle size={16} />,      label: 'Triangle',  shortcut: 'G' },
-    { tool: 'star',     icon: <Star size={16} />,          label: 'Star',      shortcut: 'S' },
+    { tool: 'rect',     icon: <Square size={15} />,        label: 'Rectangle', shortcut: 'R' },
+    { tool: 'circle',   icon: <Circle size={15} />,        label: 'Ellipse',   shortcut: 'E' },
+    { tool: 'triangle', icon: <Triangle size={15} />,      label: 'Triangle',  shortcut: 'G' },
+    { tool: 'star',     icon: <Star size={15} />,          label: 'Star',      shortcut: 'S' },
   ],
   [
-    { tool: 'freehand', icon: <PenLine size={16} />,       label: 'Freehand',  shortcut: 'F' },
-    { tool: 'path',     icon: <Spline size={16} />,        label: 'Polygon',   shortcut: 'P' },
-    { tool: 'text',     icon: <Type size={16} />,          label: 'Text',      shortcut: 'T' },
+    { tool: 'freehand', icon: <PenLine size={15} />,       label: 'Freehand',  shortcut: 'F' },
+    { tool: 'path',     icon: <Spline size={15} />,        label: 'Polygon',   shortcut: 'P' },
+    { tool: 'text',     icon: <Type size={15} />,          label: 'Text',      shortcut: 'T' },
   ],
 ]
 
@@ -29,15 +29,25 @@ export default function Toolbar({ activeTool, onToolChange, onDelete }: Props) {
   return (
     <div
       style={{
-        background: 'var(--panel-dark)',
-        borderTop: '1px solid var(--border)',
+        position: 'absolute',
+        top: 14,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        background: 'var(--surface)',
+        border: '.5px solid var(--border-mid)',
+        borderRadius: 'var(--radius-lg)',
+        padding: 4,
+        zIndex: 5,
+        boxShadow: '0 1px 4px rgba(0,0,0,.06)',
       }}
-      className="flex items-center justify-center gap-1 h-12 shrink-0 px-3"
     >
       {GROUPS.map((group, gi) => (
-        <div key={gi} className="flex items-center gap-1">
+        <div key={gi} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {gi > 0 && (
-            <div style={{ background: 'var(--border)' }} className="w-px h-5 mx-1" />
+            <div style={{ width: .5, height: 20, background: 'var(--border-mid)', margin: '0 2px' }} />
           )}
           {group.map(({ tool, icon, label, shortcut }) => (
             <button
@@ -45,11 +55,31 @@ export default function Toolbar({ activeTool, onToolChange, onDelete }: Props) {
               onClick={() => onToolChange(tool)}
               title={`${label} (${shortcut})`}
               style={{
-                background: activeTool === tool ? 'var(--accent-dim)' : 'transparent',
-                border: `1px solid ${activeTool === tool ? 'var(--accent)' : 'transparent'}`,
-                color: activeTool === tool ? '#fff' : 'var(--text-dim)',
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 7,
+                cursor: 'pointer',
+                border: 'none',
+                padding: 0,
+                background: activeTool === tool ? 'var(--accent)' : 'transparent',
+                color: activeTool === tool ? '#fff' : 'var(--text-muted)',
+                transition: 'all .1s',
               }}
-              className="w-8 h-8 flex items-center justify-center rounded transition-all hover:text-white hover:bg-white/10"
+              onMouseEnter={e => {
+                if (activeTool !== tool) {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface2)'
+                  ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text)'
+                }
+              }}
+              onMouseLeave={e => {
+                if (activeTool !== tool) {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+                  ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'
+                }
+              }}
             >
               {icon}
             </button>
@@ -57,15 +87,34 @@ export default function Toolbar({ activeTool, onToolChange, onDelete }: Props) {
         </div>
       ))}
 
-      {/* Separator + Delete */}
-      <div style={{ background: 'var(--border)' }} className="w-px h-5 mx-2" />
+      <div style={{ width: .5, height: 20, background: 'var(--border-mid)', margin: '0 2px' }} />
       <button
         onClick={onDelete}
         title="Delete selected (Del)"
-        style={{ color: 'var(--text-dim)', border: '1px solid transparent' }}
-        className="w-8 h-8 flex items-center justify-center rounded transition-all hover:text-red-400 hover:bg-red-950/50 hover:border-red-900"
+        style={{
+          width: 32,
+          height: 32,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 7,
+          cursor: 'pointer',
+          border: 'none',
+          padding: 0,
+          background: 'transparent',
+          color: 'var(--text-muted)',
+          transition: 'all .1s',
+        }}
+        onMouseEnter={e => {
+          ;(e.currentTarget as HTMLButtonElement).style.background = '#fce8e7'
+          ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--red)'
+        }}
+        onMouseLeave={e => {
+          ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+          ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'
+        }}
       >
-        <Trash2 size={16} />
+        <Trash2 size={15} />
       </button>
     </div>
   )

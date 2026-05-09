@@ -77,60 +77,224 @@ function getObjectsList(fc: fabric.Canvas): CanvasObjectInfo[] {
 
 // ─── Stitch preview ────────────────────────────────────────────────────────
 
+function parseHex(hex: string): [number, number, number] {
+  const v = parseInt(hex.replace('#', ''), 16)
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255]
+}
+
+function buildPath2D(cmds: any[], ox: number, oy: number): Path2D {
+  const p = new Path2D()
+  for (const c of cmds) {
+    switch ((c[0] as string).toUpperCase()) {
+      case 'M': p.moveTo(c[1] - ox, c[2] - oy); break
+      case 'L': p.lineTo(c[1] - ox, c[2] - oy); break
+      case 'C': p.bezierCurveTo(c[1]-ox,c[2]-oy,c[3]-ox,c[4]-oy,c[5]-ox,c[6]-oy); break
+      case 'Q': p.quadraticCurveTo(c[1]-ox,c[2]-oy,c[3]-ox,c[4]-oy); break
+      case 'Z': p.closePath(); break
+    }
+  }
+  return p
+}
+
+// Draw a single row of stitches with 3-layer 3D thread look (shadow / main / highlight).
+// Handles both segmented fill (lineDash) and continuous satin (no dash).
+function drawThreadRow(
+  ctx: CanvasRenderingContext2D,
+  y: number,
+  diag: number,
+  color: string,
+  rgb: [number, number, number],
+  stitchLen: number,   // 0 = satin (continuous)
+  dashOffset: number,
+) {
+  const [r, g, b] = rgb
+  const gap = 1.8
+  const dash: number[] = stitchLen > 0 ? [stitchLen, gap] : []
+
+  ctx.lineCap = 'round'
+  ctx.setLineDash(dash)
+  ctx.lineDashOffset = dashOffset
+
+  // Shadow
+  ctx.strokeStyle = `rgb(${r * 0.28 | 0},${g * 0.28 | 0},${b * 0.28 | 0})`
+  ctx.lineWidth = 3.6
+  ctx.beginPath(); ctx.moveTo(-diag, y); ctx.lineTo(diag, y); ctx.stroke()
+  // Main thread colour
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2.3
+  ctx.beginPath(); ctx.moveTo(-diag, y); ctx.lineTo(diag, y); ctx.stroke()
+  // Highlight
+  ctx.strokeStyle = `rgb(${Math.min(255, r + 80) | 0},${Math.min(255, g + 80) | 0},${Math.min(255, b + 80) | 0})`
+  ctx.lineWidth = 0.7
+  ctx.beginPath(); ctx.moveTo(-diag, y); ctx.lineTo(diag, y); ctx.stroke()
+}
+
+// Fill a clipped region with parallel embroidery thread rows.
+function drawEmbroideryFill(
+  ctx: CanvasRenderingContext2D,
+  diag: number,
+  props: StitchProperties,
+) {
+  const rgb = parseHex(props.color)
+  const isSatin = props.stitchType === 'satin'
+  // satin: denser rows, no segmentation; fill: brick-pattern short stitches
+  const rowSpacing  = isSatin ? Math.max(3, props.density * 0.6) : props.density
+  const stitchLen   = isSatin ? 0 : Math.max(8, props.density * 1.8)
+  const brickCycle  = stitchLen > 0 ? stitchLen + 1.8 : 0
+
+  ctx.save()
+  ctx.rotate((props.angle * Math.PI) / 180)
+  const n = Math.ceil((diag * 2) / rowSpacing) + 2
+  for (let i = -n; i <= n; i++) {
+    const brickOff = (brickCycle > 0 && i % 2 !== 0) ? brickCycle * 0.5 : 0
+    drawThreadRow(ctx, i * rowSpacing, diag, props.color, rgb, stitchLen, brickOff)
+  }
+  ctx.restore()
+}
+
+// Stroke an outline path with a dashed 3D running stitch.
+// `pathFn` should call ctx.beginPath() + shape commands (no stroke call).
+function drawRunningStitch(
+  ctx: CanvasRenderingContext2D,
+  pathFn: () => void,
+  props: StitchProperties,
+) {
+  const [r, g, b] = parseHex(props.color)
+  ctx.lineCap = 'round'
+  ctx.setLineDash([10, 6])
+  ctx.lineDashOffset = 0
+
+  ctx.strokeStyle = `rgb(${r * 0.28 | 0},${g * 0.28 | 0},${b * 0.28 | 0})`
+  ctx.lineWidth = 3.6; pathFn(); ctx.stroke()
+  ctx.strokeStyle = props.color
+  ctx.lineWidth = 2.3; pathFn(); ctx.stroke()
+  ctx.strokeStyle = `rgb(${Math.min(255, r + 80) | 0},${Math.min(255, g + 80) | 0},${Math.min(255, b + 80) | 0})`
+  ctx.lineWidth = 0.7; pathFn(); ctx.stroke()
+}
+
+function renderTextStitch(
+  ctx: CanvasRenderingContext2D,
+  obj: fabric.IText,
+  props: StitchProperties,
+) {
+  const mainCanvas = ctx.canvas
+  const W = mainCanvas.width, H = mainCanvas.height
+  const offEl = document.createElement('canvas')
+  offEl.width = W; offEl.height = H
+  const oc = offEl.getContext('2d')!
+
+  // Mirror whatever transform ctx currently has (includes viewport zoom/pan)
+  const vt = ctx.getTransform()
+  oc.setTransform(vt)
+
+  const center = obj.getCenterPoint()
+  const sx = obj.scaleX ?? 1, sy = obj.scaleY ?? 1
+  const w = (obj.width ?? 0) * sx, h = (obj.height ?? 0) * sy
+  const diag = Math.sqrt(w * w + h * h)
+
+  oc.save()
+  oc.translate(center.x, center.y)
+  oc.rotate(((obj.angle ?? 0) * Math.PI) / 180)
+  if (props.stitchType === 'running') {
+    drawRunningStitch(oc, () => { oc.beginPath(); oc.rect(-w / 2, -h / 2, w, h) }, props)
+  } else {
+    drawEmbroideryFill(oc, diag, props)
+  }
+  oc.restore()
+
+  // Mask stitch lines to actual glyph outlines via destination-in compositing.
+  // Use the same getCenterPoint()+rotate+scale as the stitch fill so origins match exactly.
+  oc.globalCompositeOperation = 'destination-in'
+  oc.setTransform(vt)
+  oc.save()
+  oc.translate(center.x, center.y)
+  oc.rotate(((obj.angle ?? 0) * Math.PI) / 180)
+  oc.scale(sx, sy)
+  oc.fillStyle = 'white'
+  const fSize = obj.fontSize ?? 28
+  oc.font = `${obj.fontWeight ?? 'normal'} ${fSize}px "${obj.fontFamily ?? 'Arial'}"`
+  oc.textAlign = 'center'
+  oc.textBaseline = 'middle'
+  const lines = (obj.text ?? '').split('\n')
+  const lh = fSize * ((obj.lineHeight as number | undefined) ?? 1.16)
+  const totalH = lines.length * lh
+  lines.forEach((line, i) => {
+    oc.fillText(line, 0, -totalH / 2 + (i + 0.5) * lh)
+  })
+  oc.restore()
+
+  // Blit offscreen onto main canvas — reset to identity so pixel coords are direct
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.drawImage(offEl, 0, 0)
+  ctx.restore()
+}
+
 function renderStitchPreview(ctx: CanvasRenderingContext2D, obj: fabric.Object) {
   const props = (obj as any).stitchProps as StitchProperties | undefined
   if (!props || !obj.visible) return
 
-  const center = obj.getCenterPoint()
-  const scaleX = obj.scaleX ?? 1
-  const scaleY = obj.scaleY ?? 1
-  const objRad = ((obj.angle ?? 0) * Math.PI) / 180
-  const w = (obj.width ?? 0) * scaleX
-  const h = (obj.height ?? 0) * scaleY
+  if (obj.type === 'i-text') {
+    renderTextStitch(ctx, obj as fabric.IText, props)
+    return
+  }
 
   ctx.save()
-  ctx.translate(center.x, center.y)
-  ctx.rotate(objRad)
 
-  ctx.beginPath()
-  if (obj.type === 'circle') {
-    ctx.arc(0, 0, ((obj as fabric.Circle).radius ?? 0) * Math.max(scaleX, scaleY), 0, Math.PI * 2)
-  } else if (obj.type === 'triangle') {
-    ctx.moveTo(0, -h / 2); ctx.lineTo(w / 2, h / 2); ctx.lineTo(-w / 2, h / 2); ctx.closePath()
-  } else {
-    ctx.rect(-w / 2, -h / 2, w, h)
-  }
-  ctx.clip()
-
-  const dw = obj.type === 'circle' ? ((obj as fabric.Circle).radius ?? 0) * 2 * Math.max(scaleX, scaleY) : w
-  const dh = obj.type === 'circle' ? ((obj as fabric.Circle).radius ?? 0) * 2 * Math.max(scaleX, scaleY) : h
-  const diag = Math.sqrt(dw * dw + dh * dh)
-
-  ctx.globalAlpha = 0.75
-  ctx.strokeStyle = props.color
-
-  if (props.stitchType === 'running') {
-    ctx.setLineDash([7, 5])
-    ctx.lineWidth = 1.6
-    ctx.beginPath()
-    if (obj.type === 'circle') {
-      ctx.arc(0, 0, ((obj as fabric.Circle).radius ?? 0) * Math.max(scaleX, scaleY), 0, Math.PI * 2)
-    } else if (obj.type === 'triangle') {
-      ctx.moveTo(0, -h / 2); ctx.lineTo(w / 2, h / 2); ctx.lineTo(-w / 2, h / 2); ctx.closePath()
+  if (obj.type === 'path') {
+    // ── polygon / freehand / star ─────────────────────────────────────
+    const cmds = (obj as any).path as any[] | undefined
+    if (!cmds || cmds.length === 0) { ctx.restore(); return }
+    const po = (obj as any).pathOffset as { x: number; y: number } | undefined
+    const shape = buildPath2D(cmds, po?.x ?? 0, po?.y ?? 0)
+    const m = obj.calcTransformMatrix()
+    ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5])
+    ctx.save(); ctx.clip(shape)
+    const w = obj.width ?? 0, h = obj.height ?? 0
+    const diag = Math.sqrt(w * w + h * h)
+    if (props.stitchType === 'running') {
+      const [rr, gg, bb] = parseHex(props.color)
+      ctx.lineCap = 'round'
+      ctx.setLineDash([10, 6])
+      ctx.strokeStyle = `rgb(${rr * 0.28 | 0},${gg * 0.28 | 0},${bb * 0.28 | 0})`
+      ctx.lineWidth = 3.6; ctx.stroke(shape)
+      ctx.strokeStyle = props.color
+      ctx.lineWidth = 2.3; ctx.stroke(shape)
+      ctx.strokeStyle = `rgb(${Math.min(255, rr + 80) | 0},${Math.min(255, gg + 80) | 0},${Math.min(255, bb + 80) | 0})`
+      ctx.lineWidth = 0.7; ctx.stroke(shape)
     } else {
-      ctx.rect(-w / 2, -h / 2, w, h)
+      drawEmbroideryFill(ctx, diag, props)
     }
-    ctx.stroke()
+    ctx.restore()
   } else {
-    ctx.setLineDash([])
-    ctx.lineWidth = 0.9
-    ctx.rotate((props.angle * Math.PI) / 180)
-    const n = Math.ceil((diag * 2) / props.density) + 2
-    for (let i = -n; i <= n; i++) {
-      const y = i * props.density
-      ctx.beginPath(); ctx.moveTo(-diag, y); ctx.lineTo(diag, y); ctx.stroke()
+    // ── rect / circle / triangle ──────────────────────────────────────
+    const sx = obj.scaleX ?? 1, sy = obj.scaleY ?? 1
+    const w = (obj.width ?? 0) * sx, h = (obj.height ?? 0) * sy
+    const isCircle   = obj.type === 'circle'
+    const isTriangle = obj.type === 'triangle'
+    const r    = isCircle ? ((obj as fabric.Circle).radius ?? 0) * Math.max(sx, sy) : 0
+    const diag = Math.sqrt((isCircle ? r * 2 : w) ** 2 + (isCircle ? r * 2 : h) ** 2)
+
+    const center = obj.getCenterPoint()
+    ctx.translate(center.x, center.y)
+    ctx.rotate(((obj.angle ?? 0) * Math.PI) / 180)
+
+    const clipPath = () => {
+      ctx.beginPath()
+      if (isCircle)        ctx.arc(0, 0, r, 0, Math.PI * 2)
+      else if (isTriangle) { ctx.moveTo(0,-h/2); ctx.lineTo(w/2,h/2); ctx.lineTo(-w/2,h/2); ctx.closePath() }
+      else                 ctx.rect(-w/2, -h/2, w, h)
     }
+
+    ctx.save(); clipPath(); ctx.clip()
+    if (props.stitchType === 'running') {
+      drawRunningStitch(ctx, clipPath, props)
+    } else {
+      drawEmbroideryFill(ctx, diag, props)
+    }
+    ctx.restore()
   }
+
   ctx.restore()
 }
 
@@ -140,6 +304,7 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
   ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const canvasElRef = useRef<HTMLCanvasElement>(null)
+    const overlayRef = useRef<HTMLCanvasElement>(null)
     const fcRef = useRef<fabric.Canvas | null>(null)
     const hoopRef = useRef<{ centerX: number; centerY: number; size: number } | null>(null)
 
@@ -223,11 +388,46 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
             width: (obj.width ?? 0) * sx, height: (obj.height ?? 0) * sy,
             angle: obj.angle ?? 0, stitchProps: sp,
           }
-          if (obj.type === 'rect')     shapes.push({ type: 'rect', ...base })
-          else if (obj.type === 'triangle') shapes.push({ type: 'triangle', ...base })
-          else if (obj.type === 'circle')
+          if (obj.type === 'rect') {
+            shapes.push({ type: 'rect', ...base })
+          } else if (obj.type === 'triangle') {
+            shapes.push({ type: 'triangle', ...base })
+          } else if (obj.type === 'circle') {
             shapes.push({ type: 'circle', ...base, radius: ((obj as fabric.Circle).radius ?? 0) * Math.max(sx, sy) })
-          else if (obj.type === 'path') shapes.push({ type: 'path', ...base })
+          } else if (obj.type === 'path') {
+            // Convert Fabric path commands to canvas-space SVG path string
+            const rawPath = (obj as any).path as any[] | undefined
+            const po = (obj as any).pathOffset as { x: number; y: number } | undefined
+            if (rawPath) {
+              const m = obj.calcTransformMatrix()
+              const tx = (lx: number, ly: number) => {
+                const ox = lx - (po?.x ?? 0), oy = ly - (po?.y ?? 0)
+                return [m[0]*ox + m[2]*oy + m[4], m[1]*ox + m[3]*oy + m[5]] as [number, number]
+              }
+              const parts: string[] = []
+              for (const cmd of rawPath) {
+                const type = cmd[0] as string
+                if (type === 'M' || type === 'L') {
+                  const [cx, cy] = tx(cmd[1], cmd[2])
+                  parts.push(`${type} ${cx.toFixed(2)} ${cy.toFixed(2)}`)
+                } else if (type === 'C') {
+                  const [x1, y1] = tx(cmd[1], cmd[2])
+                  const [x2, y2] = tx(cmd[3], cmd[4])
+                  const [ex, ey] = tx(cmd[5], cmd[6])
+                  parts.push(`C ${x1.toFixed(2)} ${y1.toFixed(2)} ${x2.toFixed(2)} ${y2.toFixed(2)} ${ex.toFixed(2)} ${ey.toFixed(2)}`)
+                } else if (type === 'Q') {
+                  const [x1, y1] = tx(cmd[1], cmd[2])
+                  const [ex, ey] = tx(cmd[3], cmd[4])
+                  parts.push(`Q ${x1.toFixed(2)} ${y1.toFixed(2)} ${ex.toFixed(2)} ${ey.toFixed(2)}`)
+                } else if (type === 'Z' || type === 'z') {
+                  parts.push('Z')
+                }
+              }
+              // Path is already in canvas space — send centerX/Y=0, angle=0 so backend
+              // does not apply a second transform on top of the already-transformed coords.
+              shapes.push({ type: 'path', ...base, centerX: 0, centerY: 0, angle: 0, pathData: parts.join(' ') })
+            }
+          }
         })
         return { shapes, hoopCenterX: hoop.centerX, hoopCenterY: hoop.centerY, hoopSize: hoop.size, hoopPhysicalMM: 150 }
       },
@@ -239,62 +439,72 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       if (!container || !el) return
 
       const fc = new fabric.Canvas(el, {
-        backgroundColor: '#5c6475',
         selection: true,
         preserveObjectStacking: true,
       })
       fcRef.current = fc
 
-      const resize = () => { fc.setWidth(container.clientWidth); fc.setHeight(container.clientHeight); fc.renderAll() }
+      const resize = () => {
+        const w = container.clientWidth, h = container.clientHeight
+        fc.setWidth(w); fc.setHeight(h)
+        const ov = overlayRef.current
+        if (ov) { ov.width = w; ov.height = h }
+        hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
+        fc.renderAll()
+      }
       resize()
       const ro = new ResizeObserver(resize)
       ro.observe(container)
 
-      // ── Circular hoop ────────────────────────────────────────────────────
-      const makeHoop = () => {
-        const cw = container.clientWidth, ch = container.clientHeight
-        const size = Math.min(cw, ch) * 0.78
-        const cx = cw / 2, cy = ch / 2
-        hoopRef.current = { centerX: cx, centerY: cy, size }
+      // ── White background + grid (drawn in before:render, behind all objects) ──
+      fc.on('before:render', ({ ctx }: any) => {
+        const vpt = (fc.viewportTransform ?? [1, 0, 0, 1, 0, 0]) as number[]
+        const zoom = vpt[0]
+        const W = fc.width ?? 0, H = fc.height ?? 0
 
-        const hoopData = { isHoop: true }
-        const commonHoop = { selectable: false, evented: false, data: hoopData }
+        // White fill (replaces backgroundColor)
+        ctx.save()
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, W, H)
+        ctx.restore()
 
-        // Outer brass ring
-        const outerRing = new fabric.Circle({
-          ...commonHoop,
-          radius: size / 2, left: cx - size / 2, top: cy - size / 2,
-          fill: '#b8955a', stroke: '#7a5c1e', strokeWidth: 2,
-        })
-        // Middle screw ring
-        const innerRingR = size / 2 - 14
-        const innerRing = new fabric.Circle({
-          ...commonHoop,
-          radius: innerRingR, left: cx - innerRingR, top: cy - innerRingR,
-          fill: '#d4aa6e', stroke: '#9a6f28', strokeWidth: 1.5,
-        })
-        // Fabric (cream)
-        const fabricR = size / 2 - 22
-        const fabricCircle = new fabric.Circle({
-          ...commonHoop,
-          radius: fabricR, left: cx - fabricR, top: cy - fabricR,
-          fill: '#f4ede0', stroke: '#e0d4be', strokeWidth: 1,
-        })
-        fc.add(outerRing, innerRing, fabricCircle)
-        fc.sendObjectToBack(fabricCircle)
-        fc.sendObjectToBack(innerRing)
-        fc.sendObjectToBack(outerRing)
-      }
-      makeHoop()
+        // Grid lines in logical canvas space
+        const invZ = 1 / zoom
+        const ox = -vpt[4] * invZ, oy = -vpt[5] * invZ
+        const ex = ox + W * invZ, ey = oy + H * invZ
+        const grid = 25
+        const x0 = Math.floor(ox / grid) * grid
+        const y0 = Math.floor(oy / grid) * grid
 
-      // ── Stitch preview ───────────────────────────────────────────────────
-      fc.on('after:render', (e: any) => {
-        const ctx: CanvasRenderingContext2D | undefined = e?.ctx ?? (fc as any).contextContainer
-        if (!ctx) return
+        ctx.save()
+        ctx.setTransform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5])
+        ctx.strokeStyle = '#e0e0e0'
+        ctx.lineWidth = 1 / zoom
+        ctx.setLineDash([])
+        ctx.beginPath()
+        for (let x = x0; x <= ex + grid; x += grid) { ctx.moveTo(x, oy); ctx.lineTo(x, ey) }
+        for (let y = y0; y <= ey + grid; y += grid) { ctx.moveTo(ox, y); ctx.lineTo(ex, y) }
+        ctx.stroke()
+        ctx.restore()
+      })
+
+      // ── Stitch preview (separate overlay canvas — avoids Fabric ctx transform ambiguity) ──
+      fc.on('after:render', () => {
+        const ov = overlayRef.current
+        if (!ov) return
+        const oc = ov.getContext('2d')!
+        oc.clearRect(0, 0, ov.width, ov.height)
+        // ctx is at identity in after:render (Fabric restores it before firing the event)
+        // so we apply the viewport transform ourselves on our own overlay canvas
+        const vpt = (fc.viewportTransform ?? [1, 0, 0, 1, 0, 0]) as number[]
+        oc.save()
+        oc.setTransform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5])
         fc.getObjects().forEach(obj => {
           if ((obj as any).data?.isHoop || (obj as any).data?.isPolyLine) return
-          renderStitchPreview(ctx, obj)
+          renderStitchPreview(oc, obj)
         })
+        oc.restore()
       })
 
       // ── Zoom ─────────────────────────────────────────────────────────────
@@ -534,8 +744,9 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [activeTool, stitchProps.color])
 
     return (
-      <div ref={containerRef} className="w-full h-full">
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }}>
         <canvas ref={canvasElRef} />
+        <canvas ref={overlayRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
       </div>
     )
   }
