@@ -277,7 +277,7 @@ export default function App() {
         </aside>
 
         {/* Canvas area */}
-        <main style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
+        <main style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
           {/* Floating toolbar */}
           <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onDelete={() => canvasRef.current?.deleteSelected()} />

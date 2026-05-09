@@ -70,3 +70,12 @@ input[type="color"] { cursor: pointer; padding: 0; border: none; }
 ::-webkit-scrollbar        { width: 5px; }
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: var(--border-mid); border-radius: 3px; }
+
+/* Fabric.js wrapper — must fill its container */
+.canvas-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+.canvas-container canvas {
+  display: block;
+}

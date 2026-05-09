@@ -744,7 +744,7 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [activeTool, stitchProps.color])
 
     return (
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }}>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
         <canvas ref={canvasElRef} />
         <canvas ref={overlayRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
       </div>
