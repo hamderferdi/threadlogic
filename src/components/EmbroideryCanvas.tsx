@@ -472,11 +472,11 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
         const zoom = vpt[0]
         const W = fc.width ?? 0, H = fc.height ?? 0
 
-        // White fill (replaces backgroundColor)
+        // White fill — use physical pixel dimensions so retina (DPR>1) is fully covered
         ctx.save()
         ctx.setTransform(1, 0, 0, 1, 0, 0)
         ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, W, H)
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
         ctx.restore()
 
         // Grid lines in logical canvas space
