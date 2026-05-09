@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Undo2, Redo2, Upload, Download,
   Pencil, Eye, Sliders, Play,
@@ -54,6 +54,21 @@ export default function App() {
   const [activeNav, setActiveNav]     = useState('Design')
   const [gridOn, setGridOn]           = useState(false)
   const canvasRef = useRef<EmbroideryCanvasHandle>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
+
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    const update = () => {
+      const r = el.getBoundingClientRect()
+      setCanvasSize({ w: Math.floor(r.width), h: Math.floor(r.height) })
+    }
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    update()
+    return () => ro.disconnect()
+  }, [])
 
   const showToast = (msg: string, type: 'ok' | 'warn' | 'err' = 'ok') => {
     setToast({ msg, type })
@@ -277,7 +292,7 @@ export default function App() {
         </aside>
 
         {/* Canvas area */}
-        <main style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <main ref={mainRef} style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
 
           {/* Floating toolbar */}
           <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onDelete={() => canvasRef.current?.deleteSelected()} />
@@ -313,6 +328,8 @@ export default function App() {
             onSelectionChange={handleSelectionChange}
             onObjectsChange={setObjects}
             onZoomChange={setZoom}
+            canvasWidth={canvasSize.w}
+            canvasHeight={canvasSize.h}
           />
 
           {/* Toast notification */}

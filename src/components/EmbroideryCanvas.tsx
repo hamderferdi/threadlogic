@@ -20,6 +20,8 @@ interface Props {
   onSelectionChange: (hasSelection: boolean, props: StitchProperties | null) => void
   onObjectsChange?: (objects: CanvasObjectInfo[]) => void
   onZoomChange?: (zoom: number) => void
+  canvasWidth?: number
+  canvasHeight?: number
 }
 
 export interface EmbroideryCanvasHandle {
@@ -301,7 +303,7 @@ function renderStitchPreview(ctx: CanvasRenderingContext2D, obj: fabric.Object) 
 // ─── Component ─────────────────────────────────────────────────────────────
 
 const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
-  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange }, ref) => {
+  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange, canvasWidth = 0, canvasHeight = 0 }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const canvasElRef = useRef<HTMLCanvasElement>(null)
     const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -444,20 +446,6 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       })
       fcRef.current = fc
 
-      const resize = () => {
-        // container is position:absolute inset:0 — its own clientWidth/Height is always correct
-        const w = container.clientWidth, h = container.clientHeight
-        if (w === 0 || h === 0) return
-        fc.setWidth(w); fc.setHeight(h)
-        const ov = overlayRef.current
-        if (ov) { ov.width = w; ov.height = h }
-        hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
-        fc.renderAll()
-      }
-      let rafId = requestAnimationFrame(resize)
-      const ro = new ResizeObserver(() => { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(resize) })
-      ro.observe(container)
-      window.addEventListener('resize', resize)
 
       // ── White background + grid (drawn in before:render, behind all objects) ──
       fc.on('before:render', ({ ctx }: any) => {
@@ -713,9 +701,6 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       window.addEventListener('keyup', onKeyUp)
 
       return () => {
-        cancelAnimationFrame(rafId)
-        ro.disconnect()
-        window.removeEventListener('resize', resize)
         window.removeEventListener('keydown', onKeyDown)
         window.removeEventListener('keyup', onKeyUp)
         fc.dispose(); fcRef.current = null
@@ -723,6 +708,17 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [notifyObjects])
 
     useEffect(() => { const cleanup = initCanvas(); return () => { cleanup?.() } }, [initCanvas])
+
+    useEffect(() => {
+      const fc = fcRef.current
+      if (!fc || canvasWidth === 0 || canvasHeight === 0) return
+      fc.setWidth(canvasWidth)
+      fc.setHeight(canvasHeight)
+      const ov = overlayRef.current
+      if (ov) { ov.width = canvasWidth; ov.height = canvasHeight }
+      hoopRef.current = { centerX: canvasWidth / 2, centerY: canvasHeight / 2, size: Math.min(canvasWidth, canvasHeight) * 0.8 }
+      fc.renderAll()
+    }, [canvasWidth, canvasHeight])
 
     useEffect(() => {
       const fc = fcRef.current
