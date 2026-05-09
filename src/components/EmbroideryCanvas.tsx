@@ -445,16 +445,21 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       fcRef.current = fc
 
       const resize = () => {
-        const w = container.clientWidth, h = container.clientHeight
+        // Read from the parent element — guaranteed to have the flex-computed size
+        const parent = container.parentElement ?? container
+        const w = parent.clientWidth, h = parent.clientHeight
+        if (w === 0 || h === 0) return
         fc.setWidth(w); fc.setHeight(h)
         const ov = overlayRef.current
         if (ov) { ov.width = w; ov.height = h }
         hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
         fc.renderAll()
       }
-      resize()
-      const ro = new ResizeObserver(resize)
-      ro.observe(container)
+      // Use rAF so the browser has completed the flex layout pass before we measure
+      let rafId = requestAnimationFrame(resize)
+      const ro = new ResizeObserver(() => { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(resize) })
+      ro.observe(container.parentElement ?? container)
+      window.addEventListener('resize', resize)
 
       // ── White background + grid (drawn in before:render, behind all objects) ──
       fc.on('before:render', ({ ctx }: any) => {
@@ -710,7 +715,9 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       window.addEventListener('keyup', onKeyUp)
 
       return () => {
+        cancelAnimationFrame(rafId)
         ro.disconnect()
+        window.removeEventListener('resize', resize)
         window.removeEventListener('keydown', onKeyDown)
         window.removeEventListener('keyup', onKeyUp)
         fc.dispose(); fcRef.current = null

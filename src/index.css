@@ -71,11 +71,10 @@ input[type="color"] { cursor: pointer; padding: 0; border: none; }
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: var(--border-mid); border-radius: 3px; }
 
-/* Fabric.js wrapper — must fill its container */
-.canvas-container {
+/* Fabric.js wrapper and canvases must fill their container */
+.canvas-container,
+.canvas-container canvas {
   width: 100% !important;
   height: 100% !important;
-}
-.canvas-container canvas {
   display: block;
 }
