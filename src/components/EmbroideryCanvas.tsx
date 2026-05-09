@@ -20,8 +20,6 @@ interface Props {
   onSelectionChange: (hasSelection: boolean, props: StitchProperties | null) => void
   onObjectsChange?: (objects: CanvasObjectInfo[]) => void
   onZoomChange?: (zoom: number) => void
-  canvasWidth?: number
-  canvasHeight?: number
 }
 
 export interface EmbroideryCanvasHandle {
@@ -303,7 +301,7 @@ function renderStitchPreview(ctx: CanvasRenderingContext2D, obj: fabric.Object) 
 // ─── Component ─────────────────────────────────────────────────────────────
 
 const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
-  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange, canvasWidth = 0, canvasHeight = 0 }, ref) => {
+  ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const canvasElRef = useRef<HTMLCanvasElement>(null)
     const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -446,6 +444,19 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       })
       fcRef.current = fc
 
+      const resize = () => {
+        const w = container.clientWidth, h = container.clientHeight
+        if (w === 0 || h === 0) return
+        fc.setWidth(w); fc.setHeight(h)
+        const ov = overlayRef.current
+        if (ov) { ov.width = w; ov.height = h }
+        hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
+        fc.renderAll()
+      }
+      let rafId = requestAnimationFrame(resize)
+      const ro = new ResizeObserver(() => { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(resize) })
+      ro.observe(container)
+      window.addEventListener('resize', resize)
 
       // ── White background + grid (drawn in before:render, behind all objects) ──
       fc.on('before:render', ({ ctx }: any) => {
@@ -701,6 +712,9 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       window.addEventListener('keyup', onKeyUp)
 
       return () => {
+        cancelAnimationFrame(rafId)
+        ro.disconnect()
+        window.removeEventListener('resize', resize)
         window.removeEventListener('keydown', onKeyDown)
         window.removeEventListener('keyup', onKeyUp)
         fc.dispose(); fcRef.current = null
@@ -708,17 +722,6 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [notifyObjects])
 
     useEffect(() => { const cleanup = initCanvas(); return () => { cleanup?.() } }, [initCanvas])
-
-    useEffect(() => {
-      const fc = fcRef.current
-      if (!fc || canvasWidth === 0 || canvasHeight === 0) return
-      fc.setWidth(canvasWidth)
-      fc.setHeight(canvasHeight)
-      const ov = overlayRef.current
-      if (ov) { ov.width = canvasWidth; ov.height = canvasHeight }
-      hoopRef.current = { centerX: canvasWidth / 2, centerY: canvasHeight / 2, size: Math.min(canvasWidth, canvasHeight) * 0.8 }
-      fc.renderAll()
-    }, [canvasWidth, canvasHeight])
 
     useEffect(() => {
       const fc = fcRef.current
@@ -745,7 +748,15 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [activeTool, stitchProps.color])
 
     return (
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      <div ref={containerRef} style={{
+        position: 'fixed',
+        top: 'var(--topbar-h)',
+        left: 'var(--sidebar-w)',
+        right: 'var(--params-w)',
+        bottom: 0,
+        overflow: 'hidden',
+        zIndex: 1,
+      }}>
         <canvas ref={canvasElRef} />
         <canvas ref={overlayRef} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
       </div>

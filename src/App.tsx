@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import {
   Undo2, Redo2, Upload, Download,
   Pencil, Eye, Sliders, Play,
@@ -54,21 +54,6 @@ export default function App() {
   const [activeNav, setActiveNav]     = useState('Design')
   const [gridOn, setGridOn]           = useState(false)
   const canvasRef = useRef<EmbroideryCanvasHandle>(null)
-  const mainRef = useRef<HTMLElement>(null)
-  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
-
-  useEffect(() => {
-    const el = mainRef.current
-    if (!el) return
-    const update = () => {
-      const r = el.getBoundingClientRect()
-      setCanvasSize({ w: Math.floor(r.width), h: Math.floor(r.height) })
-    }
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    update()
-    return () => ro.disconnect()
-  }, [])
 
   const showToast = (msg: string, type: 'ok' | 'warn' | 'err' = 'ok') => {
     setToast({ msg, type })
@@ -153,7 +138,7 @@ export default function App() {
         background: 'var(--surface)',
         borderBottom: '.5px solid var(--border-mid)',
         flexShrink: 0,
-        zIndex: 10,
+        zIndex: 30,
       }}>
         {/* Logo */}
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, letterSpacing: '-.02em' }}>
@@ -225,7 +210,7 @@ export default function App() {
       <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
         {/* Sidebar */}
-        <aside style={{ width: 'var(--sidebar-w)', flexShrink: 0, background: 'var(--surface)', borderRight: '.5px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '8px 0' }}>
+        <aside style={{ width: 'var(--sidebar-w)', flexShrink: 0, background: 'var(--surface)', borderRight: '.5px solid var(--border)', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '8px 0', position: 'relative', zIndex: 10 }}>
           {NAV_ITEMS.map((item, i) => {
             const prevGroup = i > 0 ? NAV_ITEMS[i - 1].group : null
             const showGroupLabel = item.group && item.group !== prevGroup
@@ -292,7 +277,7 @@ export default function App() {
         </aside>
 
         {/* Canvas area */}
-        <main ref={mainRef} style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
+        <main style={{ flex: 1, minWidth: 0, background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
 
           {/* Floating toolbar */}
           <Toolbar activeTool={activeTool} onToolChange={setActiveTool} onDelete={() => canvasRef.current?.deleteSelected()} />
@@ -320,7 +305,7 @@ export default function App() {
             ))}
           </div>
 
-          {/* Canvas — fills the entire main grid cell */}
+          {/* Canvas — position:fixed between the sidebars */}
           <EmbroideryCanvas
             ref={canvasRef}
             activeTool={activeTool}
@@ -328,8 +313,6 @@ export default function App() {
             onSelectionChange={handleSelectionChange}
             onObjectsChange={setObjects}
             onZoomChange={setZoom}
-            canvasWidth={canvasSize.w}
-            canvasHeight={canvasSize.h}
           />
 
           {/* Toast notification */}
@@ -371,14 +354,16 @@ export default function App() {
         </main>
 
         {/* Params panel */}
-        <RightPanel
-          objects={objects}
-          hasSelection={hasSelection}
-          stitchProps={stitchProps}
-          onStitchChange={handleStitchChange}
-          onSelectObject={id => canvasRef.current?.selectObjectById(id)}
-          onToggleVisibility={id => canvasRef.current?.toggleObjectVisibility(id)}
-        />
+        <div style={{ position: 'relative', zIndex: 10, flexShrink: 0 }}>
+          <RightPanel
+            objects={objects}
+            hasSelection={hasSelection}
+            stitchProps={stitchProps}
+            onStitchChange={handleStitchChange}
+            onSelectObject={id => canvasRef.current?.selectObjectById(id)}
+            onToggleVisibility={id => canvasRef.current?.toggleObjectVisibility(id)}
+          />
+        </div>
       </div>
     </div>
   )
