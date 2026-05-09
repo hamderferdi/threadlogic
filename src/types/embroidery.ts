@@ -35,6 +35,15 @@ export interface SerializedShape {
   stitchProps: StitchProperties;
 }
 
+export interface CanvasObjectInfo {
+  id: string;
+  name: string;
+  type: string;
+  visible: boolean;
+  selected: boolean;
+  color: string;
+}
+
 export interface ExportData {
   shapes: SerializedShape[];
   hoopCenterX: number;
