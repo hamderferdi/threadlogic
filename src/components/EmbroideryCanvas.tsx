@@ -438,31 +438,23 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
       const el = canvasElRef.current
       if (!container || !el) return
 
-      // Compute canvas size from window dimensions + CSS variable offsets.
-      // This is more reliable than container.clientWidth which can read as 0
-      // if layout hasn't settled when the effect fires.
-      const getCSSPx = (name: string, fallback: number) => {
-        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-        const n = parseFloat(v)
-        return isNaN(n) ? fallback : n
+      const getSize = () => {
+        const r = container.getBoundingClientRect()
+        return { w: Math.round(r.width), h: Math.round(r.height) }
       }
-      const getSize = () => ({
-        w: Math.floor(window.innerWidth  - getCSSPx('--sidebar-w', 210) - getCSSPx('--params-w', 272)),
-        h: Math.floor(window.innerHeight - getCSSPx('--topbar-h',  48)),
-      })
 
       const { w: iw, h: ih } = getSize()
-      el.width  = iw
-      el.height = ih
+      el.width  = iw || 800
+      el.height = ih || 600
 
       const fc = new fabric.Canvas(el, {
         selection: true,
         preserveObjectStacking: true,
-        width: iw,
-        height: ih,
+        width:  iw || 800,
+        height: ih || 600,
       })
       fcRef.current = fc
-      hoopRef.current = { centerX: iw / 2, centerY: ih / 2, size: Math.min(iw, ih) * 0.8 }
+      hoopRef.current = { centerX: (iw || 800) / 2, centerY: (ih || 600) / 2, size: Math.min(iw || 800, ih || 600) * 0.8 }
 
       const resize = () => {
         const { w, h } = getSize()
@@ -473,7 +465,6 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
         hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
         fc.renderAll()
       }
-      resize() // sync call so Fabric dimensions match the CSS immediately
       let rafId = requestAnimationFrame(resize)
       const ro = new ResizeObserver(() => { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(resize) })
       ro.observe(container)
