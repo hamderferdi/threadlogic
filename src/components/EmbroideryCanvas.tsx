@@ -473,6 +473,7 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
         hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
         fc.renderAll()
       }
+      resize() // sync call so Fabric dimensions match the CSS immediately
       let rafId = requestAnimationFrame(resize)
       const ro = new ResizeObserver(() => { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(resize) })
       ro.observe(container)
