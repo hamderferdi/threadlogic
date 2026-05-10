@@ -303,7 +303,6 @@ function renderStitchPreview(ctx: CanvasRenderingContext2D, obj: fabric.Object) 
 const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
   ({ activeTool, stitchProps, onSelectionChange, onObjectsChange, onZoomChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
-    const canvasElRef = useRef<HTMLCanvasElement>(null)
     const overlayRef = useRef<HTMLCanvasElement>(null)
     const fcRef = useRef<fabric.Canvas | null>(null)
     const hoopRef = useRef<{ centerX: number; centerY: number; size: number } | null>(null)
@@ -435,37 +434,48 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
 
     const initCanvas = useCallback(() => {
       const container = containerRef.current
-      const el = canvasElRef.current
-      if (!container || !el) return
+      if (!container) return
 
-      // Let CSS fill the parent, then read the actual rendered pixel size.
-      // This is the most reliable way — no DOM measurement guesswork.
-      el.style.display = 'block'
-      el.style.width   = '100%'
-      el.style.height  = '100%'
-      const { width: w, height: h } = el.getBoundingClientRect()
-      el.width  = Math.round(w) || 800
-      el.height = Math.round(h) || 600
+      // Measure the container before Fabric exists so we get the real available area.
+      const rect = container.getBoundingClientRect()
+      const w = Math.round(rect.width)  || 800
+      const h = Math.round(rect.height) || 600
+
+      // Create canvas programmatically so we control dimensions before Fabric wraps it.
+      const el = document.createElement('canvas')
+      el.width  = w
+      el.height = h
+      container.insertBefore(el, container.firstChild)
 
       const fc = new fabric.Canvas(el, {
         selection: true,
         preserveObjectStacking: true,
-        width:  el.width,
-        height: el.height,
+        width:  w,
+        height: h,
       })
       fcRef.current = fc
-      hoopRef.current = { centerX: el.width / 2, centerY: el.height / 2, size: Math.min(el.width, el.height) * 0.8 }
+      hoopRef.current = { centerX: w / 2, centerY: h / 2, size: Math.min(w, h) * 0.8 }
+
+      // Fabric wraps the canvas in .canvas-container with inline width/height px.
+      // Force it to fill the container absolutely so the upper-canvas (event layer) covers everything.
+      const fillWrapper = () => {
+        const wrapper = el.parentElement
+        if (!wrapper) return
+        wrapper.style.position = 'absolute'
+        wrapper.style.inset    = '0'
+        wrapper.style.width    = ''
+        wrapper.style.height   = ''
+      }
+      fillWrapper()
 
       const resize = () => {
-        // After Fabric init, Fabric's own wrapper controls the CSS size.
-        // Read the wrapper's rendered size so we stay in sync.
-        const wrap = el.parentElement  // .canvas-container
-        if (!wrap) return
-        const r = wrap.getBoundingClientRect()
-        const nw = Math.round(r.width)  || container.clientWidth
-        const nh = Math.round(r.height) || container.clientHeight
+        const r = container.getBoundingClientRect()
+        const nw = Math.round(r.width)
+        const nh = Math.round(r.height)
         if (!nw || !nh) return
         fc.setWidth(nw); fc.setHeight(nh)
+        // fc.setWidth re-applies inline px styles on the wrapper — override again.
+        fillWrapper()
         const ov = overlayRef.current
         if (ov) { ov.width = nw; ov.height = nh }
         hoopRef.current = { centerX: nw / 2, centerY: nh / 2, size: Math.min(nw, nh) * 0.8 }
@@ -733,6 +743,10 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
         window.removeEventListener('keydown', onKeyDown)
         window.removeEventListener('keyup', onKeyUp)
         fc.dispose(); fcRef.current = null
+        // Remove the programmatically-inserted canvas wrapper
+        const wrapper = el.parentElement ?? container.querySelector('.canvas-container')
+        if (wrapper && container.contains(wrapper)) container.removeChild(wrapper)
+        else if (container.contains(el)) container.removeChild(el)
       }
     }, [notifyObjects])
 
@@ -763,9 +777,8 @@ const EmbroideryCanvas = forwardRef<EmbroideryCanvasHandle, Props>(
     }, [activeTool, stitchProps.color])
 
     return (
-      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }}>
-        <canvas ref={canvasElRef} style={{ display: 'block', width: '100%', height: '100%' }} />
-        <canvas ref={overlayRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+        <canvas ref={overlayRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', width: '100%', height: '100%' }} />
       </div>
     )
   }
